@@ -40,6 +40,7 @@ Flags:
       --config string   config file (default is .issues-to-go.yaml)
   -c, --count int       Sets the amount of issues/comments to fetch at once (default 100)
   -h, --help            help for issues-to-go
+      --milestones      Create a separate folder with issues linked to milestones.
   -o, --output string   Output folder to download the issues to (default "./issues")
   -r, --repo string     Repository to download (eg: S7evinK/issues-to-go)
       --utc             Use UTC for dates. Defaults to false
