@@ -4,7 +4,6 @@ go 1.13
 
 require (
 	github.com/golang/protobuf v1.3.2 // indirect
-	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pelletier/go-toml v1.6.0 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/shurcooL/githubv4 v0.0.0-20191102174205-af46314aec7b

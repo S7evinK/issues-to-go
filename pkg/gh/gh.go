@@ -20,7 +20,7 @@ import (
 type (
 	GH struct {
 		client    *github.Client
-		opts      options
+		opts      Options
 		variables map[string]interface{}
 		states    []github.IssueState
 	}
@@ -48,7 +48,7 @@ type (
 		Author    Author    `graphql:"author"`
 		CreatedAt time.Time `graphql:"createdAt"`
 		Milestone Milestone `graphql:"milestone"`
-		Comments  Comments  `graphql:"comments(first: $count, after: $commentsCursor )"`
+		Comments  Comments  `graphql:"comments(first: $count, after: $commentsCursor)"`
 		State     string    `graphql:"state"`
 		Closed    bool      `graphql:"closed"`
 		ClosedAt  time.Time `graphql:"closedAt"`
@@ -77,7 +77,7 @@ type (
 
 	Query struct {
 		Repository struct {
-			IssueConnection IssueConnection `graphql:"issues(first: $count, after: $issueCursor, filterBy: $filterBy )"`
+			IssueConnection IssueConnection `graphql:"issues(first: $count, after: $issueCursor, filterBy: $filterBy)"`
 		} `graphql:"repository(owner: $owner, name: $name)"`
 	}
 
@@ -97,111 +97,113 @@ const (
 	ErrNoRepository = Error("could not determine repository. Make sure it is in the format USER/REPOSITORY")
 )
 
-type option func(*options) error
+type Option func(*Options) error
 
-type options struct {
-	token      string
-	user       string
-	repo       string
-	output     string
-	count      int
-	all        bool
-	since      time.Time
-	milestones bool
-	tz         *time.Location
+// Options defines all available options for the application
+type Options struct {
+	Token      string
+	User       string
+	Repo       string
+	OutputPath string
+	Count      int
+	AllIssues  bool
+	Since      time.Time
+	Milestones bool
+	TZ         *time.Location
 }
 
-func Repo(r string) option {
-	return func(o *options) error {
+// Repo extracts the user and repo from a full repo name (eg. S7evinK/issues-to-go)
+func Repo(r string) Option {
+	return func(o *Options) error {
 		s := strings.Split(r, "/")
 		if len(s) != 2 {
 			return ErrNoRepository
 		}
-		o.user = s[0]
-		o.repo = s[1]
+		o.User = s[0]
+		o.Repo = s[1]
 		return nil
 	}
 }
 
-// Token sets the Github access token and returns an options
-func Token(t string) option {
-	return func(o *options) error {
-		o.token = t
+// Token sets the Github access token and returns an option
+func Token(t string) Option {
+	return func(o *Options) error {
+		o.Token = t
 		return nil
 	}
 }
 
 // Output sets the output folder and returns an option
-func Output(t string) option {
-	return func(o *options) error {
-		o.output = t
+func Output(t string) Option {
+	return func(o *Options) error {
+		o.OutputPath = t
 		return nil
 	}
 }
 
 // All sets the issues to download and returns an option
-func All(a bool) option {
-	return func(o *options) error {
-		o.all = a
+func All(a bool) Option {
+	return func(o *Options) error {
+		o.AllIssues = a
 		return nil
 	}
 }
 
 // Count sets the issue count to fetch at once and returns an option
-func Count(i int) option {
-	return func(o *options) error {
+func Count(i int) Option {
+	return func(o *Options) error {
 		if i <= 0 {
 			return fmt.Errorf("invalid count value: expected count > 0")
 		}
-		o.count = i
+		o.Count = i
 		return nil
 	}
 }
 
 // UTC sets the timezone to use for dates and returns an option
-func UTC(b bool) option {
-	return func(o *options) error {
+func UTC(b bool) Option {
+	return func(o *Options) error {
 		var tz = time.UTC
 		if !b {
 			tz = time.Local
 		}
-		o.tz = tz
+		o.TZ = tz
 		return nil
 	}
 }
 
 // Since sets the time to use for filtering issues and returns an option
-func Since(s string) option {
-	return func(o *options) error {
+func Since(s string) Option {
+	return func(o *Options) error {
 		since, err := time.Parse(time.RFC3339, s)
 		if err != nil {
 			since = time.Unix(0, 0)
 			log.Println("Unable to parse timestamp, using default value of", since)
 		}
-		o.since = since
+		o.Since = since
 		return nil
 	}
 }
 
 // Milestones sets the option to download milestones and returns an option
-func Milestones(b bool) option {
-	return func(o *options) error {
-		o.milestones = b
+func Milestones(b bool) Option {
+	return func(o *Options) error {
+		o.Milestones = b
 		return nil
 	}
 }
 
 // New creates a new github v4 client and prepares the folders and queries
-func New(opts ...option) (*GH, error) {
-	c := options{}
+func New(opts ...Option) (*GH, error) {
+	o := Options{}
 	for _, opt := range opts {
-		if err := opt(&c); err != nil {
+		if err := opt(&o); err != nil {
 			return nil, err
 		}
 	}
 
 	src := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: c.token},
+		&oauth2.Token{AccessToken: o.Token},
 	)
 
 	httpClient := oauth2.NewClient(context.Background(), src)
@@ -210,16 +212,16 @@ func New(opts ...option) (*GH, error) {
 	client := github.NewClient(httpClient)
 
 	variables := map[string]interface{}{
-		"owner":          github.String(c.user),
-		"name":           github.String(c.repo),
+		"owner":          github.String(o.User),
+		"name":           github.String(o.Repo),
 		"issueCursor":    (*github.String)(nil),
 		"commentsCursor": (*github.String)(nil),
-		"count":          github.Int(c.count),
+		"count":          github.Int(o.Count),
 	}
 
 	gh := &GH{
 		client:    client,
-		opts:      c,
+		opts:      o,
 		variables: variables,
 	}
 
@@ -234,13 +236,13 @@ func New(opts ...option) (*GH, error) {
 func (gh *GH) FetchIssues() error {
 	var (
 		count = 0
-		since = gh.opts.since
-		tz    = gh.opts.tz
+		since = gh.opts.Since
+		tz    = gh.opts.TZ
 		q     Query
 	)
 	gh.states = []github.IssueState{github.IssueStateOpen}
 
-	if gh.opts.all {
+	if gh.opts.AllIssues {
 		gh.states = append(gh.states, github.IssueStateClosed)
 	}
 
@@ -267,7 +269,7 @@ func (gh *GH) FetchIssues() error {
 				footer := []byte(fmt.Sprintf("Closed on %v", issue.Node.ClosedAt.In(tz)))
 				comments = append(comments, footer...)
 			}
-			outputFile := filepath.Join(gh.opts.output, strings.ToLower(issue.Node.State), strconv.Itoa(issue.Node.Number)+".md")
+			outputFile := filepath.Join(gh.opts.OutputPath, strings.ToLower(issue.Node.State), strconv.Itoa(issue.Node.Number)+".md")
 			if err := ioutil.WriteFile(outputFile, comments, os.ModePerm); err != nil {
 				return errors.Wrap(err, fmt.Sprintf("error writing issue %d", issue.Node.Number))
 			}
@@ -293,7 +295,7 @@ func (gh *GH) FetchIssues() error {
 }
 
 func (gh *GH) writeMilestone(issue *IssueEdge, regexMilestones *regexp.Regexp, outputFile string) error {
-	if gh.opts.milestones && issue.Node.Milestone.Title != "" {
+	if gh.opts.Milestones && issue.Node.Milestone.Title != "" {
 		ms := regexMilestones.ReplaceAllString(issue.Node.Milestone.Title, "_")
 		if err := gh.createMilestoneDir(ms); err != nil {
 			return err
@@ -302,7 +304,7 @@ func (gh *GH) writeMilestone(issue *IssueEdge, regexMilestones *regexp.Regexp, o
 		if !filepath.IsAbs(oldPath) {
 			oldPath = filepath.Join("..", "..", "..", "..", outputFile)
 		}
-		newPath := filepath.Join(gh.opts.output, "milestones", ms, strings.ToLower(issue.Node.State), strconv.Itoa(issue.Node.Number)+".md")
+		newPath := filepath.Join(gh.opts.OutputPath, "Milestones", ms, strings.ToLower(issue.Node.State), strconv.Itoa(issue.Node.Number)+".md")
 		if err := os.Symlink(oldPath, newPath); err != nil && !os.IsExist(err) {
 			return err
 		}
@@ -318,9 +320,9 @@ func (gh *GH) extractComments(issue *IssueEdge, tz *time.Location) ([]byte, erro
 		regex     = regexp.MustCompile(`(#(\d+))`)
 		variables = map[string]interface{}{
 			"issueNumber": github.Int(issue.Node.Number),
-			"count":       github.Int(gh.opts.count),
-			"owner":       github.String(gh.opts.user),
-			"name":        github.String(gh.opts.repo),
+			"count":       github.Int(gh.opts.Count),
+			"owner":       github.String(gh.opts.User),
+			"name":        github.String(gh.opts.Repo),
 		}
 	)
 
@@ -368,11 +370,11 @@ func (gh *GH) extractComments(issue *IssueEdge, tz *time.Location) ([]byte, erro
 }
 
 func (gh *GH) createDirs() error {
-	if err := os.MkdirAll(filepath.Join(gh.opts.output, "open"), os.ModePerm); err != nil {
+	if err := os.MkdirAll(filepath.Join(gh.opts.OutputPath, "open"), os.ModePerm); err != nil {
 		return err
 	}
-	if gh.opts.all {
-		if err := os.MkdirAll(filepath.Join(gh.opts.output, "closed"), os.ModePerm); err != nil {
+	if gh.opts.AllIssues {
+		if err := os.MkdirAll(filepath.Join(gh.opts.OutputPath, "closed"), os.ModePerm); err != nil {
 			return err
 		}
 	}
@@ -380,12 +382,12 @@ func (gh *GH) createDirs() error {
 }
 
 func (gh *GH) createMilestoneDir(milestone string) error {
-	if gh.opts.milestones {
-		if err := os.MkdirAll(filepath.Join(gh.opts.output, "milestones", milestone, "open"), os.ModePerm); err != nil {
+	if gh.opts.Milestones {
+		if err := os.MkdirAll(filepath.Join(gh.opts.OutputPath, "milestones", milestone, "open"), os.ModePerm); err != nil {
 			return err
 		}
-		if gh.opts.all {
-			if err := os.MkdirAll(filepath.Join(gh.opts.output, "milestones", milestone, "closed"), os.ModePerm); err != nil {
+		if gh.opts.AllIssues {
+			if err := os.MkdirAll(filepath.Join(gh.opts.OutputPath, "milestones", milestone, "closed"), os.ModePerm); err != nil {
 				return err
 			}
 		}
