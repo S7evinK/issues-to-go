@@ -86,6 +86,20 @@ type (
 			Issue Issue `graphql:"issue(number: $issueNumber)"`
 		} `graphql:"repository(owner: $owner, name: $name)"`
 	}
+
+	Option func(*Options) error
+	// Options defines all available options for the application
+	Options struct {
+		Token      string
+		User       string
+		Repo       string
+		OutputPath string
+		Count      int
+		AllIssues  bool
+		Since      time.Time
+		Milestones bool
+		TZ         *time.Location
+	}
 )
 
 type Error string
@@ -96,21 +110,6 @@ const (
 	ErrNoIssues     = Error("no new or updated issues found")
 	ErrNoRepository = Error("could not determine repository. Make sure it is in the format USER/REPOSITORY")
 )
-
-type Option func(*Options) error
-
-// Options defines all available options for the application
-type Options struct {
-	Token      string
-	User       string
-	Repo       string
-	OutputPath string
-	Count      int
-	AllIssues  bool
-	Since      time.Time
-	Milestones bool
-	TZ         *time.Location
-}
 
 // Repo extracts the user and repo from a full repo name (eg. S7evinK/issues-to-go)
 func Repo(r string) Option {
