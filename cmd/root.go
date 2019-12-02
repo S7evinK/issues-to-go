@@ -53,11 +53,15 @@ After the first run a config file (.issues-to-go.yaml) will be created, subseque
 		if err != nil {
 			log.Fatal("Unable to create new github client: ", err)
 		}
+		chClose := make(chan bool)
+		s := NewSpinner(chClose)
 
 		log.Printf("Getting new and updated issues/comments from %s since %v\n", repo, since.UTC())
+		go s.Run()
 		if err := cl.FetchIssues(); err != nil && err != gh.ErrNoIssues {
 			log.Fatal("Unable to fetch issues: ", err)
 		}
+		chClose <- true
 
 		// update lastIssueTime
 		viper.Set("lastIssueTime", time.Now().UTC().Format(time.RFC3339))
