@@ -299,14 +299,21 @@ func (gh *GH) writeMilestone(issue *IssueEdge, regexMilestones *regexp.Regexp, o
 		if err := gh.createMilestoneDir(ms); err != nil {
 			return err
 		}
-		oldPath := filepath.Join(outputFile)
-		if !filepath.IsAbs(oldPath) {
-			oldPath = filepath.Join("..", "..", "..", "..", outputFile)
-		}
-		newPath := filepath.Join(gh.opts.OutputPath, "Milestones", ms, strings.ToLower(issue.Node.State), strconv.Itoa(issue.Node.Number)+".md")
-		if err := os.Symlink(oldPath, newPath); err != nil && !os.IsExist(err) {
+		if err := gh.createSymlink(outputFile, ms, issue); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (gh *GH) createSymlink(outputFile string, ms string, issue *IssueEdge) error {
+	oldPath := filepath.Join(outputFile)
+	if !filepath.IsAbs(oldPath) {
+		oldPath = filepath.Join("..", "..", "..", "..", outputFile)
+	}
+	newPath := filepath.Join(gh.opts.OutputPath, "milestones", ms, strings.ToLower(issue.Node.State), strconv.Itoa(issue.Node.Number)+".md")
+	if err := os.Symlink(oldPath, newPath); err != nil && !os.IsExist(err) {
+		return err
 	}
 	return nil
 }
