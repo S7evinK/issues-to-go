@@ -249,6 +249,11 @@ func (gh *GH) FetchIssues() error {
 
 	regexMilestones := regexp.MustCompile(`\/`)
 
+	existing, err := readExistingIssues(gh.opts.OutputPath)
+	if err != nil && err != os.ErrNotExist {
+		return errors.Wrap(err, "unable to read existing issues")
+	}
+
 	for {
 		err := gh.client.Query(context.Background(), &q, gh.variables)
 		if err != nil {
@@ -267,6 +272,14 @@ func (gh *GH) FetchIssues() error {
 			if issue.Node.Closed {
 				footer := []byte(fmt.Sprintf("Closed on %v", issue.Node.ClosedAt.In(tz)))
 				comments = append(comments, footer...)
+			}
+			// delete existing issues, since we'll write new ones
+			if delPaths, ok := existing[strconv.Itoa(issue.Node.Number)+".md"]; ok {
+				for _, path := range delPaths {
+					if err := os.Remove(path); err != nil {
+						return errors.Wrap(err, "unable to delete existing issue")
+					}
+				}
 			}
 			outputFile := filepath.Join(gh.opts.OutputPath, strings.ToLower(issue.Node.State), strconv.Itoa(issue.Node.Number)+".md")
 			if err := ioutil.WriteFile(outputFile, comments, os.ModePerm); err != nil {
@@ -399,4 +412,16 @@ func (gh *GH) createMilestoneDir(milestone string) error {
 		}
 	}
 	return nil
+}
+
+func readExistingIssues(path string) (map[string][]string, error) {
+	existing := make(map[string][]string)
+	err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		existing[info.Name()] = append(existing[info.Name()], path)
+		return nil
+	})
+	return existing, err
 }
