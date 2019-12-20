@@ -58,7 +58,12 @@ After the first run a config file (.issues-to-go.yaml) will be created, subseque
 
 		log.Printf("Getting new and updated issues/comments from %s since %v\n", repo, since.UTC())
 		go s.Run()
-		if err := cl.FetchIssues(); err != nil && err != gh.ErrNoIssues {
+		err = cl.FetchIssues()
+		switch err {
+		case gh.ErrNoIssues:
+			log.Println("No new or updated issues found.")
+		case nil:
+		default:
 			log.Fatal("Unable to fetch issues: ", err)
 		}
 		chClose <- true
@@ -68,10 +73,6 @@ After the first run a config file (.issues-to-go.yaml) will be created, subseque
 		if err := viper.WriteConfigAs(configName + ".yaml"); err != nil {
 			log.Fatal(fmt.Errorf("error writing to file: %v", err))
 		}
-
-		//cmd.Help()
-		//fmt.Println("Couldn't determine repository. Make sure it's in the format USER/REPOSITORY")
-
 	},
 }
 
