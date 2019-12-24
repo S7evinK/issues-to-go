@@ -254,6 +254,7 @@ func (gh *GH) FetchIssues() error {
 		return errors.Wrap(err, "unable to read existing issues")
 	}
 
+	var downloadedIssues []string
 	for {
 		err := gh.client.Query(context.Background(), &q, gh.variables)
 		if err != nil {
@@ -290,6 +291,7 @@ func (gh *GH) FetchIssues() error {
 				return errors.Wrap(err, fmt.Sprintf("error creating symlink for issue %d", issue.Node.Number))
 			}
 
+			downloadedIssues = append(downloadedIssues, outputFile)
 			count++
 		}
 
@@ -301,7 +303,11 @@ func (gh *GH) FetchIssues() error {
 		gh.variables["issueCursor"] = q.Repository.IssueConnection.PageInfo.EndCursor
 	}
 
-	log.Printf("Downloaded %d issue(s) including comments", count)
+	log.Printf("Downloaded %d issue(s) including comments:", count)
+
+	for _, fp := range downloadedIssues {
+		fmt.Println(fp)
+	}
 
 	return nil
 }
