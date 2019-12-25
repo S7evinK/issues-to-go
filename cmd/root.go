@@ -20,7 +20,7 @@ var rootCmd = &cobra.Command{
 	Use: "issues-to-go",
 	Example: `You need to set an environment variable GITHUB_TOKEN with a personal access token in it. After the first run this token can also be put in the generated config file.
 
-Download all issues associated with the repository "S7evinK/issues-to-go" to a folder "./issues":
+Download all issues associated with the repository "S7evinK/issues-to-go" to a folder "./.issues":
 	GITHUB_TOKEN=mysecrettoken issues-to-go -r S7evinK/issues-to-go
 
 Download all issues to a specific folder "output":
@@ -97,7 +97,7 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	rootCmd.Flags().StringP("repo", "r", "", "Repository to download (eg: S7evinK/issues-to-go)")
-	rootCmd.Flags().StringP("output", "o", "./issues", "Output folder to download the issues to")
+	rootCmd.Flags().StringP("output", "o", "./.issues", "Output folder to download the issues to")
 	rootCmd.Flags().Bool("utc", false, "Use UTC for dates. Defaults to false")
 	rootCmd.Flags().IntP("count", "c", 100, "Sets the amount of issues/comments to fetch at once")
 	rootCmd.Flags().Bool("all", false, "Get open and closed issues. By default only open issues will be downloaded")
