@@ -18,6 +18,7 @@ import (
 )
 
 type (
+	// GH defines the fields needed for a github client
 	GH struct {
 		client    *github.Client
 		opts      Options
@@ -25,21 +26,25 @@ type (
 		states    []github.IssueState
 	}
 
+	// IssueConnection is used in gql queries
 	IssueConnection struct {
 		Edges    []IssueEdge `graphql:"edges"`
 		PageInfo PageInfo    `graphql:"pageInfo"`
 	}
 
+	// PageInfo is used in gql queries
 	PageInfo struct {
 		EndCursor   github.String
 		HasNextPage bool
 	}
 
+	// IssueEdge is used in gql queries
 	IssueEdge struct {
 		Cursor string `graphql:"cursor"`
 		Node   Issue  `graphql:"node"`
 	}
 
+	// Issue is returned by a gql query
 	Issue struct {
 		ID        string    `graphql:"id"`
 		Number    int       `graphql:"number"`
@@ -54,19 +59,23 @@ type (
 		ClosedAt  time.Time `graphql:"closedAt"`
 	}
 
+	// Author is used in gql queries
 	Author struct {
 		Name string `graphql:"login"`
 	}
 
+	// Milestone is used in gql queries
 	Milestone struct {
 		Title string `graphql:"title"`
 	}
 
+	// Comments is used in gql queries
 	Comments struct {
 		Nodes    []Comment
 		PageInfo PageInfo `graphql:"pageInfo"`
 	}
 
+	// Comment is used in gql queries
 	Comment struct {
 		Body   string
 		Author struct {
@@ -75,19 +84,23 @@ type (
 		CreatedAt time.Time `graphql:"createdAt"`
 	}
 
+	// Query is the query executed against the github v4 api
 	Query struct {
 		Repository struct {
 			IssueConnection IssueConnection `graphql:"issues(first: $count, after: $issueCursor, filterBy: $filterBy)"`
 		} `graphql:"repository(owner: $owner, name: $name)"`
 	}
 
+	// QueryComments is the query executed against the github v4 api
 	QueryComments struct {
 		Repository struct {
 			Issue Issue `graphql:"issue(number: $issueNumber)"`
 		} `graphql:"repository(owner: $owner, name: $name)"`
 	}
 
+	// Option is used to set options
 	Option func(*Options) error
+
 	// Options defines all available options for the application
 	Options struct {
 		Token      string
@@ -102,12 +115,16 @@ type (
 	}
 )
 
+// Error is used to create new errors
 type Error string
 
+// Error returns the string representation of a error
 func (e Error) Error() string { return string(e) }
 
 const (
-	ErrNoIssues     = Error("no new or updated issues found")
+	// ErrNoIssues is returned if there are no new issues
+	ErrNoIssues = Error("no new or updated issues found")
+	// ErrNoRepository is returned if the repository couldn't be determined.
 	ErrNoRepository = Error("could not determine repository. Make sure it is in the format USER/REPOSITORY")
 )
 
