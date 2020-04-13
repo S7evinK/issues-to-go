@@ -20,10 +20,11 @@ import (
 type (
 	// GH defines the fields needed for a github client
 	GH struct {
-		client    *github.Client
-		opts      Options
-		variables map[string]interface{}
-		states    []github.IssueState
+		client         *github.Client
+		opts           Options
+		variables      map[string]interface{}
+		states         []github.IssueState
+		regexMilestone *regexp.Regexp
 	}
 
 	// IssueConnection is used in gql queries
@@ -236,9 +237,10 @@ func New(opts ...Option) (*GH, error) {
 	}
 
 	gh := &GH{
-		client:    client,
-		opts:      o,
-		variables: variables,
+		client:         client,
+		opts:           o,
+		variables:      variables,
+		regexMilestone: regexp.MustCompile(`\/`),
 	}
 
 	if err := gh.createDirs(); err != nil {
@@ -264,8 +266,6 @@ func (gh *GH) FetchIssues() error {
 
 	gh.variables["filterBy"] = github.IssueFilters{Since: &github.DateTime{since.UTC()}, States: &gh.states}
 
-	regexMilestones := regexp.MustCompile(`\/`)
-
 	existing, err := readExistingIssues(gh.opts.OutputPath)
 	if err != nil && err != os.ErrNotExist {
 		return errors.Wrap(err, "unable to read existing issues")
@@ -282,34 +282,9 @@ func (gh *GH) FetchIssues() error {
 			return ErrNoIssues
 		}
 
-		for _, issue := range q.Repository.IssueConnection.Edges {
-			comments, err := gh.extractComments(&issue, tz)
-			if err != nil {
-				return errors.Wrap(err, "unable to extract comments")
-			}
-			if issue.Node.Closed {
-				footer := []byte(fmt.Sprintf("Closed on %v", issue.Node.ClosedAt.In(tz)))
-				comments = append(comments, footer...)
-			}
-			// delete existing issues, since we'll write new ones
-			if delPaths, ok := existing[strconv.Itoa(issue.Node.Number)+".md"]; ok {
-				for _, path := range delPaths {
-					if err := os.Remove(path); err != nil {
-						return errors.Wrap(err, "unable to delete existing issue")
-					}
-				}
-			}
-			outputFile := filepath.Join(gh.opts.OutputPath, strings.ToLower(issue.Node.State), strconv.Itoa(issue.Node.Number)+".md")
-			if err := ioutil.WriteFile(outputFile, comments, os.ModePerm); err != nil {
-				return errors.Wrap(err, fmt.Sprintf("error writing issue %d", issue.Node.Number))
-			}
-
-			if err := gh.writeMilestone(&issue, regexMilestones, outputFile); err != nil {
-				return errors.Wrap(err, fmt.Sprintf("error creating symlink for issue %d", issue.Node.Number))
-			}
-
-			downloadedIssues = append(downloadedIssues, outputFile)
-			count++
+		downloadedIssues, count, err = gh.extractIssues(q, tz, existing, downloadedIssues, count)
+		if err != nil {
+			return err
 		}
 
 		// break endless loop if we're on the last page
@@ -326,6 +301,48 @@ func (gh *GH) FetchIssues() error {
 		fmt.Println(fp)
 	}
 
+	return nil
+}
+
+func (gh *GH) extractIssues(q Query, tz *time.Location, existing map[string][]string, downloadedIssues []string, count int) ([]string, int, error) {
+	for _, issue := range q.Repository.IssueConnection.Edges {
+		comments, err := gh.extractComments(&issue, tz)
+		if err != nil {
+			return nil, 0, errors.Wrap(err, "unable to extract comments")
+		}
+		if issue.Node.Closed {
+			footer := []byte(fmt.Sprintf("Closed on %v", issue.Node.ClosedAt.In(tz)))
+			comments = append(comments, footer...)
+		}
+
+		if err := deleteIssueFile(existing, issue.Node.Number); err != nil {
+			return nil, 0, err
+		}
+
+		outputFile := filepath.Join(gh.opts.OutputPath, strings.ToLower(issue.Node.State), strconv.Itoa(issue.Node.Number)+".md")
+		if err := ioutil.WriteFile(outputFile, comments, os.ModePerm); err != nil {
+			return nil, 0, errors.Wrap(err, fmt.Sprintf("error writing issue %d", issue.Node.Number))
+		}
+
+		if err := gh.writeMilestone(&issue, gh.regexMilestone, outputFile); err != nil {
+			return nil, 0, errors.Wrap(err, fmt.Sprintf("error creating symlink for issue %d", issue.Node.Number))
+		}
+
+		downloadedIssues = append(downloadedIssues, outputFile)
+		count++
+	}
+	return downloadedIssues, count, nil
+}
+
+func deleteIssueFile(existing map[string][]string, issue int) error {
+	// delete existing issues, since we'll write new ones
+	if delPaths, ok := existing[strconv.Itoa(issue)+".md"]; ok {
+		for _, path := range delPaths {
+			if err := os.Remove(path); err != nil {
+				return errors.Wrap(err, "unable to delete existing issue")
+			}
+		}
+	}
 	return nil
 }
 
